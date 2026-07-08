@@ -15,6 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .
+
+# Force the small CPU-only PyTorch wheel. Without this, pip pulls the default
+# CUDA-enabled torch build (2GB+), which regularly exceeds free-tier build
+# memory/disk limits — this is the most common cause of a generic
+# "exited with status 1" build failure for sentence-transformers on Render/Railway free tiers.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the embedding model at build time, not at first request —
