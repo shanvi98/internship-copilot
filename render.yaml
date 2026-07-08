@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: internship-copilot-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8000
+      # ANTHROPIC_API_KEY intentionally NOT set here — deployed instance runs
+      # offline-only endpoints for free. Add it later in the Render dashboard
+      # (Environment tab) if you ever want the paid backend live too.
+    healthCheckPath: /health

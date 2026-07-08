@@ -1,0 +1,15 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Optional: only needed if you want to test the paid Anthropic backend path.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # On macOS/Windows Docker Desktop, host.docker.internal reaches Ollama
+      # running on your host machine (outside the container).
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
