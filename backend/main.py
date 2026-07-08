@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from agent.orchestrator import run_pipeline
@@ -56,6 +57,9 @@ class AnalyzeResponse(BaseModel):
     prioritized_gaps: list[dict]
     rewritten_bullets: list[dict]
 
+@app.get("/")
+def root():
+    return RedirectResponse(url="/ui")
 
 @app.get("/health")
 def health():
