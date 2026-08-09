@@ -1,16 +1,21 @@
 """
 Tool 2: Resume Matcher
 Given resume text and JD text, computes semantic similarity per resume "chunk"
-(bullet point / project description) against the JD as a whole, and against
-each matched skill. Uses sentence-transformers so it runs fully offline —
-no API cost for what will likely be the most frequently called tool.
+(bullet point / project description) against the JD as a whole, and — when a
+skill list is supplied — identifies which bullet best evidences each skill.
+Uses sentence-transformers so it runs fully offline — no API cost for what
+will likely be the most frequently called tool.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from sentence_transformers import SentenceTransformer, util
 
 _MODEL_NAME = "all-MiniLM-L6-v2"  # small, fast, good enough for this task
 _model = None
+
+# Below this cosine similarity, we don't consider a bullet meaningful evidence
+# for a skill — better to say "no evidence found" than to force a weak match.
+_SKILL_EVIDENCE_THRESHOLD = 0.35
 
 
 def get_model():
@@ -25,6 +30,7 @@ class MatchResult:
     jd_similarity_score: float  # 0-1, overall resume-vs-JD semantic fit
     bullet_scores: list[tuple[str, float]]  # each resume bullet + its similarity to the JD
     top_bullets: list[str]  # bullets most relevant to this JD, ranked
+    skill_evidence: dict[str, str | None] = field(default_factory=dict)  # skill -> best supporting bullet, or None
 
 
 def split_resume_into_bullets(resume_text: str) -> list[str]:
@@ -34,7 +40,14 @@ def split_resume_into_bullets(resume_text: str) -> list[str]:
     return [l for l in lines if len(l.split()) >= 4]
 
 
-def match_resume_to_jd(resume_text: str, jd_text: str, top_k: int = 5) -> MatchResult:
+def match_resume_to_jd(
+    resume_text: str, jd_text: str, jd_skills: list[str] | None = None, top_k: int = 5
+) -> MatchResult:
+    """
+    jd_skills is optional: pass the JD's matched skill list (e.g. from
+    extract_skills_offline) to also get a per-skill "which bullet proves this"
+    mapping. Omit it and you just get the overall JD-fit ranking.
+    """
     model = get_model()
     bullets = split_resume_into_bullets(resume_text)
     if not bullets:
@@ -49,10 +62,24 @@ def match_resume_to_jd(resume_text: str, jd_text: str, top_k: int = 5) -> MatchR
 
     overall_score = sum(s for _, s in bullet_scores) / len(bullet_scores)
 
+    skill_evidence: dict[str, str | None] = {}
+    if jd_skills:
+        skill_embeddings = model.encode(jd_skills, convert_to_tensor=True)
+        # one bullets-vs-skills matrix, reused for every skill — cheaper than
+        # re-encoding bullets once per skill
+        skill_sims = util.cos_sim(bullet_embeddings, skill_embeddings)  # [num_bullets x num_skills]
+        for skill_idx, skill in enumerate(jd_skills):
+            col = skill_sims[:, skill_idx].tolist()
+            best_bullet_idx = max(range(len(col)), key=lambda i: col[i])
+            skill_evidence[skill] = (
+                bullets[best_bullet_idx] if col[best_bullet_idx] >= _SKILL_EVIDENCE_THRESHOLD else None
+            )
+
     return MatchResult(
         jd_similarity_score=round(overall_score, 3),
         bullet_scores=[(b, round(s, 3)) for b, s in bullet_scores],
         top_bullets=[b for b, _ in bullet_scores[:top_k]],
+        skill_evidence=skill_evidence,
     )
 
 

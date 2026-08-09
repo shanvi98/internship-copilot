@@ -38,6 +38,7 @@ class AgentState:
         return {
             "steps": [{"step": l.step_name, "status": l.status, "detail": l.detail} for l in self.logs],
             "jd_requirements": self.jd_requirements,
+            "resume_match": self.resume_match,
             "gap_analysis": self.gap_analysis,
             "prioritized_gaps": self.prioritized_gaps,
             "rewritten_bullets": self.rewritten_bullets,

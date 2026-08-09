@@ -53,6 +53,7 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     steps: list[dict]
     jd_requirements: dict | None
+    resume_match: dict | None
     gap_analysis: dict | None
     prioritized_gaps: list[dict]
     rewritten_bullets: list[dict]
