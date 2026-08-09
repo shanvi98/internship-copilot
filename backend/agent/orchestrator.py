@@ -54,10 +54,11 @@ def run_pipeline(resume_text: str, jd_text: str, llm_backend: str = "ollama", an
 
     # --- Step 2: Resume-JD semantic matching ---
     try:
-        match = match_resume_to_jd(resume_text, jd_text)
+        match = match_resume_to_jd(resume_text, jd_text, jd_skills=state.jd_skills_offline)
         state.resume_match = {
             "jd_similarity_score": match.jd_similarity_score,
             "top_bullets": match.top_bullets,
+            "skill_evidence": match.skill_evidence,
         }
         state.log("resume_matching", "ok")
     except Exception as e:
