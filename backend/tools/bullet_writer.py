@@ -11,6 +11,8 @@ Default backend: Ollama (free, local). Optional: Anthropic API.
 import json
 import os
 import re
+from pydantic import ValidationError
+from schemas import BulletRewriteResult
 
 REWRITE_PROMPT = """You are helping a student tailor ONE resume bullet point to better match a job description, for ATS keyword alignment.
 
@@ -64,7 +66,18 @@ def rewrite_bullet(original_bullet: str, jd_skills: list[str], backend: str = "o
         raise ValueError(f"Unknown backend: {backend}")
 
     text = re.sub(r"^```(json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
-    return json.loads(text)
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"LLM did not return valid JSON: {e}") from e
+
+    try:
+        validated = BulletRewriteResult(**parsed)
+    except ValidationError as e:
+        raise ValueError(f"LLM JSON didn't match expected schema: {e}") from e
+
+    return validated.model_dump()
 
 
 if __name__ == "__main__":

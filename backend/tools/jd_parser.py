@@ -10,6 +10,8 @@ import re
 import json
 import os  # noqa: F401 (used by extract_requirements_llm for OLLAMA_HOST)
 from dataclasses import dataclass, field
+from pydantic import ValidationError
+from schemas import JDExtractionResult
 
 # A living taxonomy of skills/tools relevant to SWE/ML internships.
 # This is intentionally a plain list so it's easy to extend later.
@@ -122,7 +124,20 @@ def extract_requirements_llm(jd_text: str, backend: str = "ollama", model: str |
 
     # defensive: strip accidental code fences from either backend
     text = re.sub(r"^```(json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
-    return json.loads(text)
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"LLM did not return valid JSON: {e}") from e
+
+    try:
+        validated = JDExtractionResult(**parsed)
+    except ValidationError as e:
+        # Re-raised as ValueError so callers (and the orchestrator's retry/
+        # degrade logic) don't need to know or catch pydantic specifically.
+        raise ValueError(f"LLM JSON didn't match expected schema: {e}") from e
+
+    return validated.model_dump()
 
 
 if __name__ == "__main__":
