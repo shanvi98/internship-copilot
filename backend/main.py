@@ -45,8 +45,14 @@ if os.environ.get("ANTHROPIC_API_KEY"):
 
 
 class AnalyzeRequest(BaseModel):
-    resume_text: str = Field(..., min_length=20, description="Full resume text, plain text.")
-    jd_text: str = Field(..., min_length=20, description="Full job description text, plain text.")
+    resume_text: str = Field(
+        ..., min_length=20, max_length=8000,
+        description="Full resume text, plain text. Capped at ~8000 chars (roughly 2 pages) to bound embedding/LLM cost per request.",
+    )
+    jd_text: str = Field(
+        ..., min_length=20, max_length=6000,
+        description="Full job description text, plain text. Capped at ~6000 chars — real JDs rarely exceed this.",
+    )
     llm_backend: str = Field(default="ollama", description="'ollama' (free, local) or 'anthropic' (paid API).")
 
 
