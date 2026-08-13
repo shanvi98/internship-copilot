@@ -79,6 +79,6 @@ after that takes 30-60 seconds to wake back up.
 
 ## Roadmap
 
-- [ ] SQLite layer to track applications over time (planned)
+- [ ] SQLite layer to track applications over time (planned for future)
 - [ ] JD scraping from a URL, not just pasted text
 - [ ] React frontend (current dashboard is vanilla HTML/JS by design — see commit history for reasoning)
