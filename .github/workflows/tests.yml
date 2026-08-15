@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Deliberately NOT installing the full backend/requirements.txt here —
+      # it pulls in sentence-transformers/torch (multi-GB, multi-minute install)
+      # which tools/gap_analyzer.py's tests don't touch. Installing only what
+      # the test suite actually imports keeps CI fast and cheap.
+      - name: Install test dependencies
+        run: pip install pytest pydantic
+
+      - name: Run tests
+        working-directory: backend
+        run: pytest tests/ -v
