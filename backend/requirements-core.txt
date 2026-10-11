@@ -1,0 +1,11 @@
+# Everything the app needs except the embedding model stack.
+# Offline analysis, the API, the tracker, file upload, URL fetch and both LLM
+# backends all run with just these — and they install in seconds.
+fastapi==0.139.0
+uvicorn==0.34.0
+pydantic==2.10.0
+anthropic==1.13.0
+requests==2.32.3
+python-multipart==0.0.32
+pypdf==6.20.0
+python-docx==1.2.0

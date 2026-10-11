@@ -21,6 +21,7 @@ class JDExtractionResult(BaseModel):
     """Expected shape of extract_requirements_llm()'s output."""
 
     role_title: str = ""
+    company: str = ""
     must_have_skills: list[str] = Field(default_factory=list)
     nice_to_have_skills: list[str] = Field(default_factory=list)
     seniority: str = ""
@@ -31,6 +32,18 @@ class JDExtractionResult(BaseModel):
     def cap_responsibilities(cls, v: list[str]) -> list[str]:
         # Prompt asks for max 5, but don't trust the LLM to actually honor that.
         return v[:5]
+
+    @field_validator("must_have_skills", "nice_to_have_skills")
+    @classmethod
+    def clean_skills(cls, v: list[str]) -> list[str]:
+        # Drop blanks and case-insensitive duplicates, keep the LLM's original order.
+        seen, out = set(), []
+        for skill in v:
+            skill = skill.strip()
+            if skill and skill.lower() not in seen:
+                seen.add(skill.lower())
+                out.append(skill)
+        return out
 
 
 class BulletRewriteResult(BaseModel):
@@ -45,4 +58,4 @@ class BulletRewriteResult(BaseModel):
     def not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("rewritten_bullet must not be empty")
-        return v.strip()
+        return v.strip().lstrip("•-* ").strip()

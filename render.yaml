@@ -8,7 +8,14 @@ services:
     envVars:
       - key: PORT
         value: 8000
+      # A public server fetching arbitrary URLs is an SSRF surface. The fetcher
+      # blocks private/internal addresses, but on a shared public deployment it's
+      # simplest to turn the feature off; users can still paste JD text.
+      - key: ALLOW_URL_FETCH
+        value: "0"
       # ANTHROPIC_API_KEY intentionally NOT set here — deployed instance runs
       # offline-only endpoints for free. Add it later in the Render dashboard
       # (Environment tab) if you ever want the paid backend live too.
+      # Note: the free plan's disk is ephemeral, so the application tracker
+      # resets on each redeploy.
     healthCheckPath: /health

@@ -8,8 +8,16 @@ services:
     environment:
       # Optional: only needed if you want to test the paid Anthropic backend path.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-5-5}
       # On macOS/Windows Docker Desktop, host.docker.internal reaches Ollama
       # running on your host machine (outside the container).
       - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      # Keeps the application tracker's SQLite database across container rebuilds.
+      - copilot-data:/app/data
+
+volumes:
+  copilot-data:
