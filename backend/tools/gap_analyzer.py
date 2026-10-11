@@ -5,8 +5,11 @@ even if Ollama isn't running. Diffs the skills a JD asks for against the skills
 detectable in the resume, and produces a prioritized gap list.
 """
 
+import re
 from dataclasses import dataclass, field
-from tools.jd_parser import extract_skills_offline
+
+from tools.jd_parser import PREFERRED, REQUIRED, extract_skills_offline
+from tools.skill_taxonomy import canonicalize, group_by_category
 
 
 @dataclass
@@ -17,14 +20,53 @@ class GapAnalysis:
     missing_skills: list[str] = field(default_factory=list)   # JD wants it, resume doesn't show it
     bonus_skills: list[str] = field(default_factory=list)     # resume has it, JD didn't ask
     coverage_pct: float = 0.0                                  # % of JD skills covered
+    requirement_levels: dict[str, str] = field(default_factory=dict)  # JD skill -> required/preferred/mentioned
+
+    def to_dict(self) -> dict:
+        return {
+            "jd_skills": self.jd_skills,
+            "resume_skills": self.resume_skills,
+            "matched_skills": self.matched_skills,
+            "missing_skills": self.missing_skills,
+            "bonus_skills": self.bonus_skills,
+            "coverage_pct": self.coverage_pct,
+            "requirement_levels": self.requirement_levels,
+            "missing_by_category": group_by_category(self.missing_skills),
+            "matched_by_category": group_by_category(self.matched_skills),
+        }
 
 
-def analyze_gap(resume_text: str, jd_text: str) -> GapAnalysis:
+def _mentions(text_lower: str, phrase: str) -> bool:
+    """Every significant word of a free-text skill appears in the text (word-boundary)."""
+    words = [w for w in re.findall(r"[a-z0-9+#./-]+", phrase.lower()) if len(w) > 1 or w in {"r", "c"}]
+    return bool(words) and all(
+        re.search(r"(?<![a-z0-9])" + re.escape(w) + r"(?![a-z0-9])", text_lower) for w in words
+    )
+
+
+def analyze_gap(resume_text: str, jd_text: str, extra_jd_skills: list[str] | None = None) -> GapAnalysis:
+    """
+    extra_jd_skills: optional free-text skills (typically the LLM's must-haves)
+    that the taxonomy doesn't know about. Short ones (<= 3 words) are folded
+    into the diff using a plain text match against the resume.
+    """
     jd_result = extract_skills_offline(jd_text)
     resume_result = extract_skills_offline(resume_text)  # same taxonomy match, applied to resume text
 
     jd_set = set(jd_result.matched_skills)
     resume_set = set(resume_result.matched_skills)
+    levels = dict(jd_result.requirement_levels)
+
+    resume_lower = resume_text.lower()
+    for raw in extra_jd_skills or []:
+        raw = raw.strip()
+        if not raw or len(raw.split()) > 3 or canonicalize(raw):
+            continue  # empty, a sentence rather than a skill, or already covered by the taxonomy
+        name = raw.lower()
+        jd_set.add(name)
+        levels.setdefault(name, REQUIRED)
+        if _mentions(resume_lower, name):
+            resume_set.add(name)
 
     matched = sorted(jd_set & resume_set)
     missing = sorted(jd_set - resume_set)
@@ -39,22 +81,55 @@ def analyze_gap(resume_text: str, jd_text: str) -> GapAnalysis:
         missing_skills=missing,
         bonus_skills=bonus,
         coverage_pct=coverage,
+        requirement_levels={k: v for k, v in levels.items() if k in jd_set},
     )
 
 
-def prioritize_gaps(gap: GapAnalysis, must_have_skills: list[str] | None = None) -> list[dict]:
+def _canonical_set(skills: list[str] | None) -> set[str]:
+    """LLM skill names ("PyTorch", "K8s", "REST APIs") -> canonical taxonomy names, plus their lowercase form."""
+    out = set()
+    for skill in skills or []:
+        out.add(skill.strip().lower())
+        out.update(canonicalize(skill))
+    return out
+
+
+_PRIORITY_ORDER = {"critical": 0, "high": 1, "moderate": 2, "low": 3}
+
+
+def prioritize_gaps(
+    gap: GapAnalysis,
+    must_have_skills: list[str] | None = None,
+    nice_to_have_skills: list[str] | None = None,
+    requirement_levels: dict[str, str] | None = None,
+) -> list[dict]:
     """
-    Rank missing skills by priority. If must_have_skills is provided (from the
-    LLM-based JD extraction), missing must-haves are flagged critical.
-    Without it (pure offline mode), every missing skill is treated as equal priority.
+    Rank missing skills by priority:
+      critical — the LLM-based JD extraction lists it as a must-have
+      high     — offline section detection found it under a "requirements" part of the JD
+      moderate — mentioned in the JD, no clear signal either way
+      low      — listed as a nice-to-have / bonus / "a plus"
+    Without must_have_skills (pure offline mode) nothing is ever marked critical,
+    and without requirement_levels every missing skill is moderate.
     """
-    must_have_set = set(must_have_skills or [])
+    must_have_set = _canonical_set(must_have_skills)
+    nice_set = _canonical_set(nice_to_have_skills)
+    levels = requirement_levels or {}
+
     ranked = []
     for skill in gap.missing_skills:
-        priority = "critical" if skill in must_have_set else "moderate"
-        ranked.append({"skill": skill, "priority": priority})
-    # critical first
-    ranked.sort(key=lambda x: x["priority"] != "critical")
+        if skill in must_have_set:
+            priority, reason = "critical", "Listed as a must-have"
+        elif skill in nice_set:
+            priority, reason = "low", "Listed as nice-to-have"
+        elif levels.get(skill) == REQUIRED:
+            priority, reason = "high", "Appears in the JD's requirements"
+        elif levels.get(skill) == PREFERRED:
+            priority, reason = "low", "Described as preferred / a plus"
+        else:
+            priority, reason = "moderate", "Mentioned in the JD"
+        ranked.append({"skill": skill, "priority": priority, "reason": reason})
+    ranked.sort(key=lambda x: (_PRIORITY_ORDER[x["priority"]], x["skill"]))
     return ranked
 
 
@@ -80,5 +155,5 @@ if __name__ == "__main__":
     print(f"\nCoverage: {gap.coverage_pct}%")
 
     print("\nPrioritized gaps:")
-    for item in prioritize_gaps(gap):
-        print(f"  [{item['priority']}] {item['skill']}")
+    for item in prioritize_gaps(gap, requirement_levels=gap.requirement_levels):
+        print(f"  [{item['priority']}] {item['skill']} — {item['reason']}")

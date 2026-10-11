@@ -16,13 +16,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
 
-      # Deliberately NOT installing the full backend/requirements.txt here —
-      # it pulls in sentence-transformers/torch (multi-GB, multi-minute install)
-      # which tools/gap_analyzer.py's tests don't touch. Installing only what
-      # the test suite actually imports keeps CI fast and cheap.
+      # requirements-dev.txt builds on requirements-core.txt, which leaves out
+      # sentence-transformers/torch (multi-GB, multi-minute install). No test
+      # loads the embedding model — resume_matcher imports it lazily — so the
+      # whole suite, including the API tests, runs without it.
       - name: Install test dependencies
-        run: pip install pytest pydantic
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
 
       - name: Run tests
         working-directory: backend

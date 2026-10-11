@@ -1,1 +1,16 @@
-backend/.venv/
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local data & secrets
+.env
+*.db
+*.db-journal
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

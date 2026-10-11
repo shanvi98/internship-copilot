@@ -1,0 +1,5 @@
+# Test dependencies. Deliberately builds on requirements-core.txt, not requirements.txt:
+# the test suite never loads the embedding model, so CI skips the torch download.
+-r requirements-core.txt
+pytest==9.1.1
+httpx==0.28.1
