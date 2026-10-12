@@ -114,3 +114,41 @@ def test_empty_resume_does_not_crash():
 
     assert gap.matched_skills == []
     assert set(gap.missing_skills) == {"python", "sql"}
+
+def test_prioritize_gaps_canonicalizes_llm_skill_names():
+    """The LLM returns display names ("PyTorch", "K8s"); they must still match canonical gaps."""
+    gap = analyze_gap("I know Python.", "Requires Python, PyTorch and Kubernetes.")
+    ranked = prioritize_gaps(gap, must_have_skills=["PyTorch", "K8s"])
+
+    assert {item["skill"]: item["priority"] for item in ranked} == {"pytorch": "critical", "kubernetes": "critical"}
+
+
+def test_prioritize_gaps_uses_nice_to_haves_and_offline_levels():
+    jd = "Requirements:\n- Docker\nNice to have:\n- Kubernetes\nWe also use AWS."
+    gap = analyze_gap("I know Python.", jd)
+    ranked = prioritize_gaps(gap, nice_to_have_skills=["AWS"], requirement_levels=gap.requirement_levels)
+
+    priorities = {item["skill"]: item["priority"] for item in ranked}
+    assert priorities == {"docker": "high", "kubernetes": "low", "aws": "low"}
+    assert [item["priority"] for item in ranked] == ["high", "low", "low"]
+    assert all(item["reason"] for item in ranked)
+
+
+def test_extra_llm_skills_outside_taxonomy_are_folded_in():
+    gap = analyze_gap(
+        "Built dashboards in Looker for the sales team.",
+        "Requires Python.",
+        extra_jd_skills=["Looker", "Salesforce", "Excellent written and verbal communication skills", "Python"],
+    )
+    assert "looker" in gap.matched_skills
+    assert "salesforce" in gap.missing_skills
+    # sentences aren't skills, and taxonomy skills aren't double-counted
+    assert not any("communication" in s for s in gap.jd_skills)
+    assert gap.jd_skills.count("python") == 1
+
+
+def test_to_dict_groups_by_category():
+    gap = analyze_gap("I know Python.", "Requires Python, Docker and PyTorch.")
+    d = gap.to_dict()
+    assert d["missing_by_category"] == {"cloud_devops": ["docker"], "ml_ai": ["pytorch"]}
+    assert d["matched_by_category"] == {"languages": ["python"]}
