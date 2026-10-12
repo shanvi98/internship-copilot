@@ -140,7 +140,7 @@ architecture trade-off, not a bug — and a good thing to be able to explain in 
 Free-tier services also sleep after 15 minutes of inactivity; the first request
 after that takes 30-60 seconds to wake back up. Their disk is ephemeral too, so the
 application tracker resets on redeploy, and it has no authentication — it's a
-single-user tool, so keep a public deployment to the analysis endpoints.
+single-user tool, so keep a public deployment to the analysis on endpoints.
 
 ## API
 
